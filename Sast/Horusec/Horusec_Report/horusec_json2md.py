@@ -11,21 +11,10 @@ This script converts Horusec JSON output to a formatted Markdown report.
 """
 
 import sys
-import codecs
 import json
 import argparse
 import logging
 from datetime import datetime
-
-# Tenta importar colorama para usar cores no terminal
-try:
-    from colorama import init, Fore, Style
-    init(autoreset=True)
-    COLORAMA_AVAILABLE = True
-except ImportError:
-    COLORAMA_AVAILABLE = False
-
-sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO,
@@ -33,11 +22,12 @@ logging.basicConfig(level=logging.INFO,
 
 # Configurações
 SEVERITY_ICONS = {
-    'CRITICAL': '\U0001F7E3',
-    'HIGH': '\U0001F534',
-    'MEDIUM': '\U0001F7E1',
-    'LOW': '\U0001F7E2',
-    'INFO': '\U0001F535',
+    'CRITICAL': '🟣',
+    'HIGH': '🔴',
+    'MEDIUM': '🟠',
+    'LOW': '🟢',
+    'INFO': '🔵',
+    'UNKNOWN': '⚪'
 }
 
 
@@ -55,16 +45,11 @@ def read_horusec_json(file_path):
 
 
 def clean_text(text):
-    return text.replace('\n', ' ').replace('\r', ' ').replace('|', ' ')
-
-
-def clean_summary(summary):
-    phrase = "(1/1) * Possible vulnerability detected: "
-    return summary[len(phrase):] if summary.startswith(phrase) else summary
+    return text.replace('\n', ' ').replace('\r', ' ').replace('|', '\\|')
 
 
 def severity_icon(severity):
-    return SEVERITY_ICONS.get(severity.upper(), "")
+    return SEVERITY_ICONS.get(severity.upper(), "⚪")
 
 
 def format_date(date_string):
@@ -85,111 +70,72 @@ def validate_json_structure(data):
     return True
 
 
-def generate_markdown(data, output_path):
-    if not validate_json_structure(data):
-        sys.exit(1)
+def write_markdown_report(data, output_file):
+    with open(output_file, 'w', encoding='utf-8') as file:
+        file.write(f"# Horusec {data.get('version', 'N/A')} Scan Report\n\n")
+        file.write(f"**Status:** {data.get('status', 'N/A')}\n")
+        file.write(
+            f"**Created At:** {format_date(data.get('createdAt', 'N/A'))}\n")
+        file.write(
+            f"**Finished At:** {format_date(data.get('finishedAt', 'N/A'))}\n\n")
 
-    try:
-        with open(output_path, 'w', encoding='utf-8') as file:
-            file.write(f"# Horusec {data.get(
-                'version', 'N/A')} - Static Application Security Test\n\n")
+        file.write("## Vulnerabilities Summary\n\n")
+        file.write("| Severity | Count |\n")
+        file.write("|----------|------|\n")
+
+        severity_count = {}
+        for vuln in data.get('analysisVulnerabilities', []):
+            severity = vuln.get('severity', 'UNKNOWN')
+            severity_count[severity] = severity_count.get(severity, 0) + 1
+
+        for severity, count in severity_count.items():
+            file.write(f"| {severity_icon(severity)} {severity} | {count} |\n")
+
+        file.write("\n## Vulnerabilities Details\n\n")
+        file.write("| Severity | File | Line | Details |\n")
+        file.write("|----------|------|------|--------|\n")
+
+        for vuln in data.get('analysisVulnerabilities', []):
+            severity = vuln.get('severity', 'UNKNOWN')
+            vuln_file = clean_text(vuln.get('file', 'N/A'))
+            line = vuln.get('line', 'N/A')
+            details = clean_text(vuln.get('details', 'N/A'))
+
+            file.write(f"| {severity_icon(severity)} {severity} | {
+                       vuln_file} | {line} | {details} |\n")
+
+        file.write("\n## Detailed Vulnerabilities\n\n")
+        for i, vuln in enumerate(data.get('analysisVulnerabilities', []), 1):
+            file.write(f"### {i}. {clean_text(
+                vuln.get('details', 'N/A'))}\n\n")
+            file.write(f"**Severity:** {severity_icon(vuln.get('severity', 'UNKNOWN'))} {
+                       vuln.get('severity', 'UNKNOWN')}\n")
+            file.write(f"**File:** {clean_text(vuln.get('file', 'N/A'))}\n")
+            file.write(f"**Line:** {vuln.get('line', 'N/A')}\n")
+            file.write(f"**Code:** `{clean_text(vuln.get('code', 'N/A'))}`\n")
             file.write(
-                "- [Horusec - Static Application Security Test](#horusec---static-application-security-test)\n\n")
-            file.write("  - [Scan Info](#scan-info)\n\n")
+                f"**Details:** {clean_text(vuln.get('details', 'N/A'))}\n")
             file.write(
-                "  - [Tabela de Vulnerabilidades](#tabela-de-vulnerabilidades)\n\n")
-            file.write(
-                "  - [Descrição das Vulnerabilidades](#descrição-das-vulnerabilidades)\n\n")
+                f"**Security Tool:** {vuln.get('securityTool', 'N/A')}\n")
+            file.write(f"**Confidence:** {vuln.get('confidence', 'N/A')}\n\n")
 
-            file.write("## Scan Info\n\n")
-            file.write(f"**Version:** {data.get('version', 'N/A')}\n\n")
-            file.write(f"**Status:** {data.get('status', 'N/A')}\n\n")
-            file.write(
-                f"**CreatedAt:** {format_date(data.get('createdAt', 'N/A'))}\n\n")
-            file.write(
-                f"**FinishedAt:** {format_date(data.get('finishedAt', 'N/A'))}\n\n")
-
-            analysis_vulnerabilities = data.get('analysisVulnerabilities', [])
-
-            if not analysis_vulnerabilities:
-                file.write("Nenhuma vulnerabilidade encontrada.\n\n")
-                logging.info("Nenhuma vulnerabilidade encontrada.")
-                return
-            else:
-                num_vulnerabilities = len(analysis_vulnerabilities)
-                logging.warning(f"Vulnerabilidades encontradas: {
-                                num_vulnerabilities}.")
-
-            file.write("## Tabela de Vulnerabilidades\n\n")
-            file.write(
-                "| Severity | Rule ID | Sumário | Arquivo:Linha | Ferramenta de Segurança |\n")
-            file.write("| --- | --- | --- | --- | --- |\n")
-
-            for item in analysis_vulnerabilities:
-                vulnerability = item.get('vulnerabilities', {})
-                severity = vulnerability.get('severity', 'N/A').capitalize()
-                icon = severity_icon(severity)
-                rule_id = vulnerability.get('rule_id', 'N/A')
-                details = vulnerability.get('details', 'N/A')
-                summary = clean_text(details.split('\n', 1)[
-                                     0] if '\n' in details else details)
-                summary = f"{clean_summary(summary)[0:249]}..." if len(
-                    summary) > 254 else f"{clean_summary(summary)[0:249]}"
-                file_line = f"{vulnerability.get(
-                    'file', 'N/A')}:{vulnerability.get('line', 'N/A')}"
-                security_tool = vulnerability.get('securityTool', 'N/A')
-
-                file.write(f"| {icon} {severity} | {rule_id} | {
-                           summary} | {file_line} | {security_tool} |\n")
-
-            file.write("\n## Descrição das Vulnerabilidades\n\n")
-
-            for item in data.get('analysisVulnerabilities', []):
-                vulnerability = item.get('vulnerabilities', {})
-                severity = vulnerability.get('severity', 'N/A').capitalize()
-                icon = severity_icon(severity)
-                details = vulnerability.get('details', 'N/A')
-
-                summary, description = details.split(
-                    '\n', 1) if '\n' in details else (details, '')
-                summary = clean_summary(summary)
-                summary_summary = f"{summary[0:100]}..." if len(
-                    summary) > 254 else summary
-
-                file_line = f"{vulnerability.get(
-                    'file', 'N/A')}:{vulnerability.get('line', 'N/A')}"
-                code = vulnerability.get('code', 'N/A')
-                security_tool = vulnerability.get('securityTool', 'N/A')
-
-                file.write(f"### {icon} {summary_summary}\n\n")
-                file.write(f"**Severidade:**  {icon} {severity}\n\n")
-                file.write(f"**Sumário:** **{clean_text(summary)}**\n\n")
-                file.write(f"**Descrição:** {description}\n\n")
-                file.write(f"**Arquivo:** {file_line}\n\n")
-                file.write(f"**Código:** `{code}`\n\n")
-                file.write(f"**Ferramenta de Segurança:** {security_tool}\n\n")
-                file.write("\n---\n\n")
-
-    except IOError:
-        logging.error(f"Erro ao escrever no arquivo de saída: {output_path}")
-        sys.exit(1)
+    logging.info(f"Markdown report generated: {output_file}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert Horusec JSON to Markdown.")
-    parser.add_argument("json_path", help="Path to the Horusec JSON file.")
-    parser.add_argument(
-        "markdown_path", help="Path to save the output Markdown file.")
-    parser.add_argument("--color", action="store_true",
-                        help="Enable colored output in terminal")
+        description="Convert Horusec JSON output to Markdown")
+    parser.add_argument("input_file", help="Path to the Horusec JSON file")
+    parser.add_argument("output_file", help="Path to save the Markdown report")
     args = parser.parse_args()
 
-    if args.color and COLORAMA_AVAILABLE:
-        init(autoreset=True)
+    data = read_horusec_json(args.input_file)
 
-    horusec_data = read_horusec_json(args.json_path)
-    generate_markdown(horusec_data, args.markdown_path)
+    if not validate_json_structure(data):
+        logging.error("Invalid JSON structure. Exiting.")
+        sys.exit(1)
+
+    write_markdown_report(data, args.output_file)
 
 
 if __name__ == "__main__":
