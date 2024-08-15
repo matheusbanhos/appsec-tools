@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-"""
-Horusec JSON to Markdown Converter
-
-Author: Matheus Banhos
-GitHub: https://github.com/matheusbanhos
-
-This script converts Horusec JSON output to a formatted Markdown report.
-"""
-
 import sys
 import codecs
 import json
@@ -120,8 +110,7 @@ def generate_markdown(data, output_path):
                 summary = f"{clean_summary(summary)[0:249]}..."
             else:
                 summary = f"{clean_summary(summary)[0:249]}"
-            file_line = f"{vulnerability.get(
-                'file', 'N/A')}:{vulnerability.get('line', 'N/A')}"
+            file_line = f"{vulnerability.get('file', 'N/A')}:{vulnerability.get('line', 'N/A')}"
             security_tool = vulnerability.get('securityTool', 'N/A')
 
             file.write(
@@ -144,8 +133,7 @@ def generate_markdown(data, output_path):
             else:
                 summary_summary = summary
 
-            file_line = f"{vulnerability.get(
-                'file', 'N/A')}:{vulnerability.get('line', 'N/A')}"
+            file_line = f"{vulnerability.get('file', 'N/A')}:{vulnerability.get('line', 'N/A')}"
             code = vulnerability.get('code', 'N/A')
             security_tool = vulnerability.get('securityTool', 'N/A')
 
