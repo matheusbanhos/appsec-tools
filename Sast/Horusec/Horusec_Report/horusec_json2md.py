@@ -16,14 +16,6 @@ import argparse
 import logging
 from datetime import datetime
 
-# Tenta importar colorama para usar cores no terminal
-try:
-    from colorama import init, Fore, Style
-    init(autoreset=True)
-    COLORAMA_AVAILABLE = True
-except ImportError:
-    COLORAMA_AVAILABLE = False
-
 # Configuração de logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -130,7 +122,8 @@ def write_markdown_report(data, output_file):
             if len(summary) > 100:
                 summary = f"{summary[:97]}..."
 
-            file.write(f"| {severity_icon(severity)} {severity} | {
+            icon = severity_icon(severity)
+            file.write(f"| {icon} {severity} | {
                        vuln_file} | {line} | {summary} |\n")
 
         file.write("\n## Detailed Vulnerabilities\n\n")
@@ -171,17 +164,10 @@ def main():
     write_markdown_report(data, args.output_file)
 
     vulnerabilities_count = len(data.get('analysisVulnerabilities', []))
-    if COLORAMA_AVAILABLE:
-        if vulnerabilities_count == 0:
-            print(Fore.GREEN + "Nenhuma vulnerabilidade encontrada.")
-        else:
-            print(
-                Fore.RED + f"Vulnerabilidades encontradas: {vulnerabilities_count}.")
+    if vulnerabilities_count == 0:
+        print("Nenhuma vulnerabilidade encontrada.")
     else:
-        if vulnerabilities_count == 0:
-            print("Nenhuma vulnerabilidade encontrada.")
-        else:
-            print(f"Vulnerabilidades encontradas: {vulnerabilities_count}.")
+        print(f"Vulnerabilidades encontradas: {vulnerabilities_count}.")
 
 
 if __name__ == "__main__":
