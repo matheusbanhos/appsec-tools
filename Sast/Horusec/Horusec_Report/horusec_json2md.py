@@ -16,6 +16,14 @@ import argparse
 import logging
 from datetime import datetime
 
+# Tenta importar colorama para usar cores no terminal
+try:
+    from colorama import init, Fore, Style
+    init(autoreset=True)
+    COLORAMA_AVAILABLE = True
+except ImportError:
+    COLORAMA_AVAILABLE = False
+
 # Configuração de logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -45,7 +53,14 @@ def read_horusec_json(file_path):
 
 
 def clean_text(text):
-    return text.replace('\n', ' ').replace('\r', ' ').replace('|', '\\|')
+    return str(text).replace('\n', ' ').replace('\r', ' ').replace('|', '\\|')
+
+
+def clean_summary(summary):
+    phrase = "(1/1) * Possible vulnerability detected: "
+    if summary.startswith(phrase):
+        return summary[len(phrase):]
+    return summary
 
 
 def severity_icon(severity):
@@ -73,6 +88,16 @@ def validate_json_structure(data):
 def write_markdown_report(data, output_file):
     with open(output_file, 'w', encoding='utf-8') as file:
         file.write(f"# Horusec {data.get('version', 'N/A')} Scan Report\n\n")
+
+        # Table of contents
+        file.write("## Table of Contents\n\n")
+        file.write("- [Scan Info](#scan-info)\n")
+        file.write("- [Vulnerabilities Summary](#vulnerabilities-summary)\n")
+        file.write("- [Vulnerabilities Details](#vulnerabilities-details)\n")
+        file.write(
+            "- [Detailed Vulnerabilities](#detailed-vulnerabilities)\n\n")
+
+        file.write("## Scan Info\n\n")
         file.write(f"**Status:** {data.get('status', 'N/A')}\n")
         file.write(
             f"**Created At:** {format_date(data.get('createdAt', 'N/A'))}\n")
@@ -100,24 +125,32 @@ def write_markdown_report(data, output_file):
             vuln_file = clean_text(vuln.get('file', 'N/A'))
             line = vuln.get('line', 'N/A')
             details = clean_text(vuln.get('details', 'N/A'))
+            summary = clean_summary(details.split(
+                '\n', 1)[0] if '\n' in details else details)
+            if len(summary) > 100:
+                summary = f"{summary[:97]}..."
 
             file.write(f"| {severity_icon(severity)} {severity} | {
-                       vuln_file} | {line} | {details} |\n")
+                       vuln_file} | {line} | {summary} |\n")
 
         file.write("\n## Detailed Vulnerabilities\n\n")
         for i, vuln in enumerate(data.get('analysisVulnerabilities', []), 1):
-            file.write(f"### {i}. {clean_text(
-                vuln.get('details', 'N/A'))}\n\n")
-            file.write(f"**Severity:** {severity_icon(vuln.get('severity', 'UNKNOWN'))} {
-                       vuln.get('severity', 'UNKNOWN')}\n")
+            severity = vuln.get('severity', 'UNKNOWN')
+            details = vuln.get('details', 'N/A')
+            summary, description = details.split(
+                '\n', 1) if '\n' in details else (details, '')
+            summary = clean_summary(summary)
+
+            file.write(f"### {i}. {clean_text(summary)}\n\n")
+            file.write(f"**Severity:** {severity_icon(severity)} {severity}\n")
             file.write(f"**File:** {clean_text(vuln.get('file', 'N/A'))}\n")
             file.write(f"**Line:** {vuln.get('line', 'N/A')}\n")
             file.write(f"**Code:** `{clean_text(vuln.get('code', 'N/A'))}`\n")
-            file.write(
-                f"**Details:** {clean_text(vuln.get('details', 'N/A'))}\n")
+            file.write(f"**Details:** {clean_text(description)}\n")
             file.write(
                 f"**Security Tool:** {vuln.get('securityTool', 'N/A')}\n")
-            file.write(f"**Confidence:** {vuln.get('confidence', 'N/A')}\n\n")
+            file.write(f"**Confidence:** {vuln.get('confidence', 'N/A')}\n")
+            file.write(f"**VulnHash:** {vuln.get('vulnHash', 'N/A')}\n\n")
 
     logging.info(f"Markdown report generated: {output_file}")
 
@@ -136,6 +169,19 @@ def main():
         sys.exit(1)
 
     write_markdown_report(data, args.output_file)
+
+    vulnerabilities_count = len(data.get('analysisVulnerabilities', []))
+    if COLORAMA_AVAILABLE:
+        if vulnerabilities_count == 0:
+            print(Fore.GREEN + "Nenhuma vulnerabilidade encontrada.")
+        else:
+            print(
+                Fore.RED + f"Vulnerabilidades encontradas: {vulnerabilities_count}.")
+    else:
+        if vulnerabilities_count == 0:
+            print("Nenhuma vulnerabilidade encontrada.")
+        else:
+            print(f"Vulnerabilidades encontradas: {vulnerabilities_count}.")
 
 
 if __name__ == "__main__":
