@@ -11,7 +11,6 @@ BYPASS_RULE_ID_LIST=(
 # Lista de bypass baseada em vulnerabilityID
 BYPASS_VULNERABILITY_ID_LIST=(
   "c2427f29-2f94-47de-b84d-e08f15b139f4"
-  "c2427f29-2f94-47de-b84d-e08f15b139f4"
 )
 
 # Função para imprimir tabela
@@ -72,27 +71,27 @@ BYPASS_RULE_ID_JSON=$(printf '%s\n' "${BYPASS_RULE_ID_LIST[@]}" | jq -R . | jq -
 BYPASS_VULNERABILITY_ID_JSON=$(printf '%s\n' "${BYPASS_VULNERABILITY_ID_LIST[@]}" | jq -R . | jq -s .)
 
 # Contar vulnerabilidades por severidade
-CRITICAS=$(jq '[.analysisVulnerabilities[] | select(.vulnerabilities.severity == "CRITICAL")] | length' "$REPORT_FILE")
-ALTAS=$(jq '[.analysisVulnerabilities[] | select(.vulnerabilities.severity == "HIGH")] | length' "$REPORT_FILE")
-MEDIAS=$(jq '[.analysisVulnerabilities[] | select(.vulnerabilities.severity == "MEDIUM")] | length' "$REPORT_FILE")
-BAIXAS=$(jq '[.analysisVulnerabilities[] | select(.vulnerabilities.severity == "LOW")] | length' "$REPORT_FILE")
+CRITICAS=$(jq '[.analysisVulnerabilities[].vulnerabilities | select(.severity == "CRITICAL")] | length' "$REPORT_FILE")
+ALTAS=$(jq '[.analysisVulnerabilities[].vulnerabilities | select(.severity == "HIGH")] | length' "$REPORT_FILE")
+MEDIAS=$(jq '[.analysisVulnerabilities[].vulnerabilities | select(.severity == "MEDIUM")] | length' "$REPORT_FILE")
+BAIXAS=$(jq '[.analysisVulnerabilities[].vulnerabilities | select(.severity == "LOW")] | length' "$REPORT_FILE")
 
 # Verificar vulnerabilidades críticas e altas não bypassed
 CRITICAS_NAO_BYPASSED=$(jq --argjson bypass_rule "$BYPASS_RULE_ID_JSON" --argjson bypass_vuln "$BYPASS_VULNERABILITY_ID_JSON" '
-  [.analysisVulnerabilities[] | 
-   select(.vulnerabilities.severity == "CRITICAL") | 
+  [.analysisVulnerabilities[].vulnerabilities | 
+   select(.severity == "CRITICAL") | 
    select(
-     (.vulnerabilities.rule_id | . as $item | $bypass_rule | index($item) | not) and
-     (.vulnerabilities.vulnerabilityID | . as $item | $bypass_vuln | index($item) | not)
+     (.rule_id | . as $item | $bypass_rule | index($item) | not) and
+     (.vulnerabilityID | . as $item | $bypass_vuln | index($item) | not)
    )] | 
   length' "$REPORT_FILE")
 
 ALTAS_NAO_BYPASSED=$(jq --argjson bypass_rule "$BYPASS_RULE_ID_JSON" --argjson bypass_vuln "$BYPASS_VULNERABILITY_ID_JSON" '
-  [.analysisVulnerabilities[] | 
-   select(.vulnerabilities.severity == "HIGH") | 
+  [.analysisVulnerabilities[].vulnerabilities | 
+   select(.severity == "HIGH") | 
    select(
-     (.vulnerabilities.rule_id | . as $item | $bypass_rule | index($item) | not) and
-     (.vulnerabilities.vulnerabilityID | . as $item | $bypass_vuln | index($item) | not)
+     (.rule_id | . as $item | $bypass_rule | index($item) | not) and
+     (.vulnerabilityID | . as $item | $bypass_vuln | index($item) | not)
    )] | 
   length' "$REPORT_FILE")
 
