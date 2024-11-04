@@ -10,24 +10,39 @@ BYPASS_RULE_ID_LIST=(
 
 # Lista de bypass baseada em vulnerabilityID
 BYPASS_VULNERABILITY_ID_LIST=(
-  "c2427f29-2f94-47de-b84d-e08f15b139f4"
+  "d206aacf-edac-4df7-8f0c-6d8c715c9180"
 )
 
 # Função para imprimir tabela
 imprimir_tabela() {
-  local criticas=$1
-  local altas=$2
-  local medias=$3
-  local baixas=$4
+  local titulo="$1"
+  local criticas=$2
+  local altas=$3
+  local medias=$4
+  local baixas=$5
 
-  echo "+-----------+-------------+"
-  echo "| Severidade| Quantidade  |"
-  echo "+-----------+-------------+"
-  printf "| Crítica   | %-11d |\n" $criticas
-  printf "| Alta      | %-11d |\n" $altas
-  printf "| Média     | %-11d |\n" $medias
-  printf "| Baixa     | %-11d |\n" $baixas
-  echo "+-----------+-------------+"
+  echo "$titulo:"
+  echo "+-------------+-------------+"
+  echo "| Severidade  | Quantidade  |"
+  echo "+-------------+-------------+"
+  printf "| Crítica     | %-11d |\n" $criticas
+  printf "| Alta        | %-11d |\n" $altas
+  printf "| Média       | %-11d |\n" $medias
+  printf "| Baixa       | %-11d |\n" $baixas
+  echo "+-------------+-------------+"
+}
+
+# Função para imprimir cabeçalho
+imprimir_cabecalho() {
+  echo "================================================================="
+  echo "                ANÁLISE DE SEGURANÇA - RELATÓRIO"
+  echo "================================================================="
+  echo
+}
+
+# Função para imprimir rodapé
+imprimir_rodape() {
+  echo "================================================================="
 }
 
 # Verificar se o arquivo de relatório existe
@@ -61,10 +76,6 @@ ALTAS=$(jq '[.analysisVulnerabilities[] | select(.vulnerabilities.severity == "H
 MEDIAS=$(jq '[.analysisVulnerabilities[] | select(.vulnerabilities.severity == "MEDIUM")] | length' "$REPORT_FILE")
 BAIXAS=$(jq '[.analysisVulnerabilities[] | select(.vulnerabilities.severity == "LOW")] | length' "$REPORT_FILE")
 
-# Imprimir tabela de vulnerabilidades
-echo "Resumo de Vulnerabilidades Encontradas:"
-imprimir_tabela $CRITICAS $ALTAS $MEDIAS $BAIXAS
-
 # Verificar vulnerabilidades críticas e altas não bypassed
 CRITICAS_NAO_BYPASSED=$(jq --argjson bypass_rule "$BYPASS_RULE_ID_JSON" --argjson bypass_vuln "$BYPASS_VULNERABILITY_ID_JSON" '
   [.analysisVulnerabilities[] | 
@@ -84,37 +95,55 @@ ALTAS_NAO_BYPASSED=$(jq --argjson bypass_rule "$BYPASS_RULE_ID_JSON" --argjson b
    )] | 
   length' "$REPORT_FILE")
 
-echo ""
-echo "Análise de Vulnerabilidades:"
-
-if [ "$CRITICAS_NAO_BYPASSED" -gt 0 ]; then
-  echo "$CRITICAS_NAO_BYPASSED - Crítica(s) - A pipeline não pode prosseguir. Precisamos da sua correção dessas vulnerabilidades críticas para manter a empresa segura."
-fi
-
-if [ "$ALTAS_NAO_BYPASSED" -gt 0 ]; then
-  echo "$ALTAS_NAO_BYPASSED - Alta(s) - A pipeline não pode prosseguir. Precisamos da sua correção dessas vulnerabilidades altas para manter a empresa segura."
-fi
-
 CRITICAS_BYPASSED=$((CRITICAS - CRITICAS_NAO_BYPASSED))
-if [ "$CRITICAS_BYPASSED" -gt 0 ]; then
-  echo "$CRITICAS_BYPASSED - Crítica(s) - Encontra(m)-se na lista de bypass."
+ALTAS_BYPASSED=$((ALTAS - ALTAS_NAO_BYPASSED))
+
+# Imprimir relatório
+imprimir_cabecalho
+
+imprimir_tabela "VULNERABILIDADES FORA DA ALLOW LIST" $CRITICAS_NAO_BYPASSED $ALTAS_NAO_BYPASSED $MEDIAS $BAIXAS
+echo
+
+imprimir_tabela "VULNERABILIDADES NA ALLOW LIST" $CRITICAS_BYPASSED $ALTAS_BYPASSED 0 0
+echo
+
+if [ $CRITICAS_NAO_BYPASSED -gt 0 ] || [ $ALTAS_NAO_BYPASSED -gt 0 ]; then
+    echo "-----------------------------------------------------------------"
+    echo "                    !!! ATENÇÃO !!!"
+    echo "      🚫 A PIPELINE NÃO PODE PROSSEGUIR 🚫"
+    echo
+    echo "Motivo: Foram encontradas vulnerabilidades críticas ou altas fora da Allow List"
+    echo "-----------------------------------------------------------------"
+    echo
+    echo "Análise de Vulnerabilidades:"
+    [ $CRITICAS_NAO_BYPASSED -gt 0 ] && echo "► CRÍTICA(s) [$CRITICAS_NAO_BYPASSED] - A pipeline não pode prosseguir."
+    [ $ALTAS_NAO_BYPASSED -gt 0 ] && echo "► ALTA(s)    [$ALTAS_NAO_BYPASSED] - A pipeline não pode prosseguir."
+    echo "  Necessário correção das vulnerabilidades para manter a segurança do sistema."
+else
+    echo "-----------------------------------------------------------------"
+    echo "                    ✅ VALIDAÇÃO CONCLUÍDA"
+    echo "      A PIPELINE PODE CONTINUAR - Vulnerabilidades Permitidas"
+    echo "-----------------------------------------------------------------"
+    echo
+    echo "Análise de Vulnerabilidades:"
+    [ $CRITICAS_BYPASSED -gt 0 ] && echo "► CRÍTICA(s) [$CRITICAS_BYPASSED] - Encontra(m)-se na lista de bypass."
+    [ $ALTAS_BYPASSED -gt 0 ] && echo "► ALTA(s)    [$ALTAS_BYPASSED] - Encontra(m)-se na lista de bypass."
 fi
 
-if [ "$MEDIAS" -gt 0 ]; then
-  echo "$MEDIAS - Média(s) - Vulnerabilidades médias não bloqueiam a pipeline, mas precisamos da sua atenção no relatório."
-fi
+[ $MEDIAS -gt 0 ] && echo "► MÉDIA(s)   [$MEDIAS] - Vulnerabilidades médias não bloqueiam a pipeline,"
+[ $MEDIAS -gt 0 ] && echo "  mas precisam de atenção no relatório."
 
-if [ "$BAIXAS" -gt 0 ]; then
-  echo "$BAIXAS - Baixa(s) - Vulnerabilidades baixas não bloqueiam a pipeline, mas é recomendável revisá-las quando possível."
-fi
-
-echo ""
+echo
 echo "Validação do JSON concluída com sucesso."
+if [ $CRITICAS_NAO_BYPASSED -eq 0 ] && [ $ALTAS_NAO_BYPASSED -eq 0 ]; then
+    echo "Nenhuma vulnerabilidade crítica ou alta não bypassed foi encontrada."
+fi
+
+imprimir_rodape
 
 # Parar a pipeline se houver vulnerabilidades críticas ou altas não bypassed
-if [ "$CRITICAS_NAO_BYPASSED" -gt 0 ] || [ "$ALTAS_NAO_BYPASSED" -gt 0 ]; then
-  echo "Vulnerabilidades críticas ou altas não bypassed foram encontradas. A pipeline será interrompida."
-  exit 1
+if [ $CRITICAS_NAO_BYPASSED -gt 0 ] || [ $ALTAS_NAO_BYPASSED -gt 0 ]; then
+    exit 1
 else
-  echo "Nenhuma vulnerabilidade crítica ou alta não bypassed foi encontrada. A pipeline pode continuar."
+    exit 0
 fi
