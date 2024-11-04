@@ -11,6 +11,7 @@ BYPASS_RULE_ID_LIST=(
 # Lista de bypass baseada em vulnerabilityID
 BYPASS_VULNERABILITY_ID_LIST=(
   "c2427f29-2f94-47de-b84d-e08f15b139f4"
+  "c2427f29-2f94-47de-b84d-e08f15b139f4"
 )
 
 # Função para imprimir tabela
